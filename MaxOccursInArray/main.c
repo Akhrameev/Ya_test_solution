@@ -13,22 +13,45 @@
 
 #define NTHREADS 2
 
-void *hola(void * arg)
-{
-    int myid=*(int *) arg;
-    printf("Hello, world, I'm %d\n",myid);
-    return arg;
-}
-
 #if (!HARD)
 
+static const int numberOfAsciiChars = 256;
 char maxOccuredCharInArray (char *array, int size);
 
 int main(int argc,char *argv[]) {
-    char *array = "abcccba";
+    char *array = "abccejbfwejhfbawhefbajwebfahwbefjhab)wejhfcba";
     char maxOccuredChar = maxOccuredCharInArray (array, (int)strlen(array));
     printf("<%c>", maxOccuredChar);
     return 0;
+}
+
+struct ArrayPointerAndSize {
+    char *array;
+    size_t size;
+};
+
+//размер передан в int, таким образом, int'а будет достаточно для набора статистики
+int *maxOccuredCharInArrayInThread (char *array, int size);
+
+typedef int     *(*returningIntArrayFunc)(void *);
+typedef void    *(*returningVoidStarFunc)(void *);
+
+int *maxOccuredCharInArrayInThreadWithOneArg(void *arg) {
+    struct ArrayPointerAndSize str= *((struct ArrayPointerAndSize *) arg);
+    return maxOccuredCharInArrayInThread(str.array, (int)str.size);
+}
+
+int *maxOccuredCharInArrayInThread (char *array, int size) {
+    if (!array || size <= 0) {
+        //Ошибка: некорректные данные на входе!
+        exit(0); //0 я не собираюсь разыменовывать!
+    }
+    int *charStat = (int *) calloc((size_t) numberOfAsciiChars, (size_t) sizeof(int));
+    for (size_t i = 0; i < size; ++i) {
+        char c = array[i];
+        ++charStat[c];
+    }
+    return charStat;
 }
 
 char maxOccuredCharInArray (char *array, int size) {
@@ -37,15 +60,12 @@ char maxOccuredCharInArray (char *array, int size) {
         exit(1);
     }
     if (size < 2) { //оптимизация очевидных случаев
-        return array[0];    //если элеменотов в массиве 1 или 2, то первый элемент гарантированно попадает в ответ
+        return array[0];    //если элементов в массиве 1 или 2, то первый элемент гарантированно попадает в ответ
     }
     static const size_t maxDirectSize = 1024;
-    static const int numberOfAsciiChars = 256;
     char solution = 0;
     if (size < maxDirectSize) {
-        //alloc int array with zeros
         int *charStat = (int *) calloc((size_t) numberOfAsciiChars, (size_t) sizeof(int));
-        //size is int, so int is enough for storing stats
         for (size_t i = 0; i < size; ++i) {
             char c = array[i];
             if ((i < size - 1) && (charStat[c] >= size/2+1)) {
@@ -69,7 +89,61 @@ char maxOccuredCharInArray (char *array, int size) {
         }
         free(charStat);
     } else {
-        
+        pthread_t threads[NTHREADS];                //информация потоков
+        struct ArrayPointerAndSize *args;           //аргументы потоков
+        int **resultStatistics;                     //результаты работы потоков
+        resultStatistics = calloc(NTHREADS, sizeof(int *));
+        args = (struct ArrayPointerAndSize *)calloc(NTHREADS, sizeof(struct ArrayPointerAndSize));
+        size_t devidedSize = size / NTHREADS;
+        size_t moduloOfDevidedSize = size % NTHREADS;
+        //разделяю массив на NTHREADS частей.
+        //первые moduloOfDevidedSize частей (например, 0) будут в себе хранить devidedSize+1 элементов
+        //остальные - devidedSize элементов
+        for (size_t i = 0; i < NTHREADS; ++i) {
+            static size_t offset = 0;
+            args[i].size = (i < moduloOfDevidedSize) ? devidedSize + 1 : devidedSize;
+            args[i].array = array + sizeof(char) * offset;
+            offset += args[i].size;
+        }
+        //мне показалось, что разделить этапы важнее, чем получить 1 цикл из NTHREADS==2 операций вместо двух циклов с тем же количеством итераций
+        for (size_t i = 0; i < NTHREADS; ++i) {
+            int errcode = pthread_create(&threads[i], NULL, (returningVoidStarFunc)maxOccuredCharInArrayInThreadWithOneArg, &args[i]);
+            if (errcode) {
+                fprintf(stderr,"pthread_create: %d\n",errcode);
+                exit(3);
+            }
+        }
+        for (size_t i = 0; i < NTHREADS; ++i) {
+            int errcode = pthread_join(threads[i], (void *)&resultStatistics[i]);
+            if (errcode) {
+                fprintf(stderr,"pthread_join: %d\n",errcode);
+                exit(4);
+            }
+            if (!resultStatistics[i]) {
+                fprintf(stderr, "pthread %zu finished badly\n", i);
+                exit(5);
+            }
+        }
+        int maxOccured = 0;
+        for (unsigned char i = 0; ; ++i) {
+            //можно попробовать и здесь сделать досрочный выход - но это уже точно экономия "на спичках", так как этот цикл не может идти больше 256 итераций
+            int currentCharOccured = 0;
+            for (size_t j = 0; j < NTHREADS; ++j) {//цикл практически наверняка развернется компилятором
+                currentCharOccured += resultStatistics[j][i];
+            }
+            if (currentCharOccured > maxOccured) {
+                maxOccured = currentCharOccured;
+                solution = (char)i;
+            }
+            if (i == numberOfAsciiChars-1) {
+                break;
+            }
+        }
+        for (size_t i = 0; i < NTHREADS; ++i) {
+            free (resultStatistics[i]); //очищаю массивы, которые вернулись потоками
+        }
+        free(args);
+        free(resultStatistics);
     }
     return solution;
 }
