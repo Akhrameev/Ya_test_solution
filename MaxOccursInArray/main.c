@@ -11,9 +11,10 @@
 #include <pthread.h>
 #include <stdlib.h>
 
-#define NTHREADS 2
+#define __UP_NTHREADS 2
+#define __UP_MAX_DIRECT_SIZE 1024
+#define __UP_NUMBER_OF_ASCII_CHARS 256
 
-static const int numberOfAsciiChars = 256;
 char maxOccuredCharInArray (char *array, int size);
 
 #define TEST 1
@@ -45,10 +46,8 @@ int main(int argc,char *argv[]) {
     const size_t length = (size_t)maxPossibleLength;
     array = malloc(length * sizeof(char));
     //пока в массиве просто кусок памяти - с какими значениями - не ясно
+#if CHECK_MAJORITY
     for (size_t i = 0; i < length; ++i) {
-        if (i == 2147483645) {
-            i = i;
-        }
         //если size_t совпадет по размеру с int, беды не будет (так как length половина от беззнакового)
         if (!(i%2)) {
             array[i] = 't';
@@ -56,14 +55,19 @@ int main(int argc,char *argv[]) {
     }
     maxOccuredChar = maxOccuredCharInArray (array, (int)length);
     assert(maxOccuredChar == 't');
+#endif
     //делаю равномерное распределение символов по массиву (если забью нулями - ноль будет преобладать)
     for (size_t i = 0; i < length; ++i) {
-        array[i] = i % numberOfAsciiChars;
+        array[i] = (char)(i % __UP_NUMBER_OF_ASCII_CHARS);
     }
     //в начало вписываю символы 'a', 'a' и 'b' - теперь они будут преобладать
-    array[0] = 'a';
-    array[1] = 'a';
-    array[2] = 'b';
+    for (size_t i = 0; i < 3; ++i) {
+        if (!i || (i==1)) {
+            array[i] = 'a';
+        } else {
+            array[i] = 'b';
+        }
+    }
     maxOccuredChar = maxOccuredCharInArray (array, (int)length);
     assert(maxOccuredChar == 'a');
     //проверяю массив без 1 символа - тоже должна преобладать 'a'
@@ -98,7 +102,7 @@ int *maxOccuredCharInArrayInThread (char *array, int size) {
         //Ошибка: некорректные данные на входе!
         exit(0); //0 я не собираюсь разыменовывать!
     }
-    int *charStat = (int *) calloc((size_t) numberOfAsciiChars, (size_t) sizeof(int));
+    int *charStat = (int *) calloc((size_t) __UP_NUMBER_OF_ASCII_CHARS, (size_t) sizeof(int));
     for (size_t i = 0; i < size; ++i) {
         char c = array[i];
         ++charStat[c];
@@ -114,10 +118,9 @@ char maxOccuredCharInArray (char *array, int size) {
     if (size < 2) { //оптимизация очевидных случаев
         return array[0];    //если элементов в массиве 1 или 2, то первый элемент гарантированно попадает в ответ
     }
-    static const size_t maxDirectSize = 1024;
     char solution = 0;
-    if (size < maxDirectSize) {
-        int *charStat = (int *) calloc((size_t) numberOfAsciiChars, (size_t) sizeof(int));
+    if (size < __UP_MAX_DIRECT_SIZE) {
+        int *charStat = (int *) calloc((size_t) __UP_NUMBER_OF_ASCII_CHARS, (size_t) sizeof(int));
         for (size_t i = 0; i < size; ++i) {
             char c = array[i];
             if ((i < size - 1) && (charStat[c] >= size/2+1)) {
@@ -135,37 +138,37 @@ char maxOccuredCharInArray (char *array, int size) {
                 maxOccured = currentCharOccured;
                 solution = (char)i;
             }
-            if (i == numberOfAsciiChars-1) {
+            if (i == __UP_NUMBER_OF_ASCII_CHARS-1) {
                 break;
             }
         }
         free(charStat);
     } else {
-        pthread_t threads[NTHREADS];                //информация потоков
+        pthread_t threads[__UP_NTHREADS];                //информация потоков
         struct ArrayPointerAndSize *args;           //аргументы потоков
         int **resultStatistics;                     //результаты работы потоков
-        resultStatistics = calloc(NTHREADS, sizeof(int *));
-        args = (struct ArrayPointerAndSize *)calloc(NTHREADS, sizeof(struct ArrayPointerAndSize));
-        size_t devidedSize = size / NTHREADS;
-        size_t moduloOfDevidedSize = size % NTHREADS;
-        //разделяю массив на NTHREADS частей.
+        resultStatistics = calloc(__UP_NTHREADS, sizeof(int *));
+        args = (struct ArrayPointerAndSize *)calloc(__UP_NTHREADS, sizeof(struct ArrayPointerAndSize));
+        size_t devidedSize = size / __UP_NTHREADS;
+        size_t moduloOfDevidedSize = size % __UP_NTHREADS;
+        //разделяю массив на __UP_NTHREADS частей.
         //первые moduloOfDevidedSize частей (например, 0) будут в себе хранить devidedSize+1 элементов
         //остальные - devidedSize элементов
-        for (size_t i = 0; i < NTHREADS; ++i) {
-            static size_t offset = 0;
+        size_t offset = 0;
+        for (size_t i = 0; i < __UP_NTHREADS; ++i) {
             args[i].size = (i < moduloOfDevidedSize) ? devidedSize + 1 : devidedSize;
             args[i].array = array + sizeof(char) * offset;
             offset += args[i].size;
         }
-        //мне показалось, что разделить этапы важнее, чем получить 1 цикл из NTHREADS==2 операций вместо двух циклов с тем же количеством итераций
-        for (size_t i = 0; i < NTHREADS; ++i) {
+        //мне показалось, что разделить этапы важнее, чем получить 1 цикл из __UP_NTHREADS==2 операций вместо двух циклов с тем же количеством итераций
+        for (size_t i = 0; i < __UP_NTHREADS; ++i) {
             int errcode = pthread_create(&threads[i], NULL, (returningVoidStarFunc)maxOccuredCharInArrayInThreadWithOneArg, &args[i]);
             if (errcode) {
                 fprintf(stderr,"pthread_create: %d\n",errcode);
                 exit(3);
             }
         }
-        for (size_t i = 0; i < NTHREADS; ++i) {
+        for (size_t i = 0; i < __UP_NTHREADS; ++i) {
             int errcode = pthread_join(threads[i], (void *)&resultStatistics[i]);
             if (errcode) {
                 fprintf(stderr,"pthread_join: %d\n",errcode);
@@ -180,18 +183,18 @@ char maxOccuredCharInArray (char *array, int size) {
         for (unsigned char i = 0; ; ++i) {
             //можно попробовать и здесь сделать досрочный выход - но это уже точно экономия "на спичках", так как этот цикл не может идти больше 256 итераций
             int currentCharOccured = 0;
-            for (size_t j = 0; j < NTHREADS; ++j) {//цикл практически наверняка развернется компилятором
+            for (size_t j = 0; j < __UP_NTHREADS; ++j) {//цикл практически наверняка развернется компилятором
                 currentCharOccured += resultStatistics[j][i];
             }
             if (currentCharOccured > maxOccured) {
                 maxOccured = currentCharOccured;
                 solution = (char)i;
             }
-            if (i == numberOfAsciiChars-1) {
+            if (i == __UP_NUMBER_OF_ASCII_CHARS-1) {
                 break;
             }
         }
-        for (size_t i = 0; i < NTHREADS; ++i) {
+        for (size_t i = 0; i < __UP_NTHREADS; ++i) {
             free (resultStatistics[i]); //очищаю массивы, которые вернулись потоками
         }
         free(args);
