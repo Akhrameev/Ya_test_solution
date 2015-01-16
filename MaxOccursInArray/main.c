@@ -58,7 +58,7 @@
 #include <stdlib.h>
 
 #define __UP_NTHREADS 2
-#define __UP_MAX_DIRECT_SIZE 1024
+#define __UP_MAX_DIRECT_SIZE 16384
 #define __UP_NUMBER_OF_ASCII_CHARS 256
 
 char mostFrequentCharacter (char *array, int size);
@@ -73,9 +73,14 @@ int main(int argc,char *argv[]) {
     return 0;
 }
 #else
-#import <assert.h>
+#include <assert.h>
+#include <time.h>
 int main(int argc,char *argv[]) {
     //Не тестирую исключительные ситуации: неположительный размер массива, размер, указанный больше, чем строка - они вызовут exit(errorCode);
+    clock_t begin, end;
+    double time_spent;
+    
+    begin = clock();
     char *array = "a";
     char mostFrequentChar = mostFrequentCharacter (array, (int)strlen(array));
     assert(mostFrequentChar == 'a');
@@ -93,9 +98,15 @@ int main(int argc,char *argv[]) {
     assert(mostFrequentChar == 'b');
     unsigned int maxPossibleLength = -1;    //здесь будет максимальный unsigned int
     //если мы его поделим пополам, у нас получится как раз максимальный int
-    //maxPossibleLength = maxPossibleLength/2;
-    maxPossibleLength = __UP_MAX_DIRECT_SIZE - 1;
     //можно было через sizeof аналогично пытаться просчитать
+    maxPossibleLength = maxPossibleLength/2;
+    //
+    //maxPossibleLength = __UP_MAX_DIRECT_SIZE;
+    //maxPossibleLength = __UP_MAX_DIRECT_SIZE - 1;
+    //Для подбора оптимального значения в __UP_MAX_DIRECT_SIZE нужно раскомментировать вышестоящую пару строк и сравнить время
+    //У меня на 16384 параллелизм все равно чуть-чуть медленнее
+    //На 2147483640 разница около 10% производительности - лидирует многопоточных проход
+    //Столь маленькая в процентном соотношении разница объясняется несколькими проходами по массиву в тестах: для подготовки данных и для проведения другого теста
     const size_t length = (size_t)maxPossibleLength;
     array = malloc(length * sizeof(char));
     //пока в массиве просто кусок памяти - с какими значениями - не ясно
@@ -130,6 +141,9 @@ int main(int argc,char *argv[]) {
     mostFrequentChar = mostFrequentCharacter (array + sizeof(char) * 2, (int)length - 2);
     assert(mostFrequentChar == 'b');
     free(array);
+    end = clock();
+    time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
+    printf("time spend: %f", time_spent);
     return 0;
 }
 #endif
