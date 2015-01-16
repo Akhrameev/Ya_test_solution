@@ -73,8 +73,11 @@ int main(int argc,char *argv[]) {
     array = "abba";
     mostFrequentChar = mostFrequentCharacter (array, (int)strlen(array));
     assert(mostFrequentChar == 'a');
-    //проверю сос трокой "abb" - для этого нужно отсечь чуть-чуть длину
+    //проверю со строкой "abb" - для этого нужно отсечь чуть-чуть длину
     mostFrequentChar = mostFrequentCharacter (array, (int)strlen(array) - 1);
+    assert(mostFrequentChar == 'b');
+    //теперь проверю со строкой "bba" - должен выйти, не прочитав последний символ
+    mostFrequentChar = mostFrequentCharacter (array + sizeof(char) * 1, (int)strlen(array) - 1);
     assert(mostFrequentChar == 'b');
     array = "abbcyujk";
     mostFrequentChar = mostFrequentCharacter (array, (int)strlen(array));
@@ -113,6 +116,7 @@ int main(int argc,char *argv[]) {
     //проверяю массив без 1 символа - тоже должна преобладать 'a'
     mostFrequentChar = mostFrequentCharacter (array + sizeof(char) * 1, (int)length - 1);
     assert(mostFrequentChar == 'a');
+    //без двух символов - уже должна преобладать 'b'
     mostFrequentChar = mostFrequentCharacter (array + sizeof(char) * 2, (int)length - 2);
     assert(mostFrequentChar == 'b');
     free(array);
@@ -162,7 +166,7 @@ char mostFrequentCharacter (char *array, int size) {
         int *charStat = (int *) calloc((size_t) __UP_NUMBER_OF_ASCII_CHARS, (size_t) sizeof(int));
         for (size_t i = 0; i < size; ++i) {
             char c = array[i];
-            if ((i < size - 1) && (charStat[c] >= size/2+1)) {
+            if ((i < size - 1) && (charStat[c] >= size/2)) {
                 //оптимизация, чтобы не проходить весь массив
                 free(charStat);
                 solution = c;
