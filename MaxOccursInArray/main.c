@@ -6,24 +6,76 @@
 //  Copyright (c) 2015 Pavel Akhrameev. All rights reserved.
 //
 
-#include <stdio.h>      //tmp
+#include <stdio.h>
 #include <string.h>
 #include <pthread.h>
 #include <stdlib.h>
 
 #define NTHREADS 2
 
-#if (!HARD)
-
 static const int numberOfAsciiChars = 256;
 char maxOccuredCharInArray (char *array, int size);
 
+#define TEST 1
+
+#if (!TEST)
 int main(int argc,char *argv[]) {
     char *array = "abccejbfwejhfbawhefbajwebfahwbefjhab)wejhfcba";
     char maxOccuredChar = maxOccuredCharInArray (array, (int)strlen(array));
     printf("<%c>", maxOccuredChar);
     return 0;
 }
+#else
+#import <assert.h>
+int main(int argc,char *argv[]) {
+    //Не тестирую исключительные ситуации: неположительный размер массива, размер, указанный больше, чем строка - они вызовут exit(errorCode);
+    char *array = "a";
+    char maxOccuredChar = maxOccuredCharInArray (array, (int)strlen(array));
+    assert(maxOccuredChar == 'a');
+    array = "abba";
+    maxOccuredChar = maxOccuredCharInArray (array, (int)strlen(array));
+    assert(maxOccuredChar == 'a');
+    //проверю сос трокой "abb" - для этого нужно отсечь чуть-чуть длину
+    maxOccuredChar = maxOccuredCharInArray (array, (int)strlen(array) - 1);
+    assert(maxOccuredChar == 'b');
+    unsigned int maxPossibleLength = -1;    //здесь будет максимальный unsigned int
+    //если мы его поделим пополам, у нас получится как раз максимальный int
+    maxPossibleLength = maxPossibleLength/2;
+    //можно было через sizeof аналогично пытаться просчитать
+    const size_t length = (size_t)maxPossibleLength;
+    array = malloc(length * sizeof(char));
+    //пока в массиве просто кусок памяти - с какими значениями - не ясно
+    for (size_t i = 0; i < length; ++i) {
+        if (i == 2147483645) {
+            i = i;
+        }
+        //если size_t совпадет по размеру с int, беды не будет (так как length половина от беззнакового)
+        if (!(i%2)) {
+            array[i] = 't';
+        }
+    }
+    maxOccuredChar = maxOccuredCharInArray (array, (int)length);
+    assert(maxOccuredChar == 't');
+    //делаю равномерное распределение символов по массиву (если забью нулями - ноль будет преобладать)
+    for (size_t i = 0; i < length; ++i) {
+        array[i] = i % numberOfAsciiChars;
+    }
+    //в начало вписываю символы 'a', 'a' и 'b' - теперь они будут преобладать
+    array[0] = 'a';
+    array[1] = 'a';
+    array[2] = 'b';
+    maxOccuredChar = maxOccuredCharInArray (array, (int)length);
+    assert(maxOccuredChar == 'a');
+    //проверяю массив без 1 символа - тоже должна преобладать 'a'
+    maxOccuredChar = maxOccuredCharInArray (array + sizeof(char) * 1, (int)length - 1);
+    assert(maxOccuredChar == 'a');
+    maxOccuredChar = maxOccuredCharInArray (array + sizeof(char) * 2, (int)length - 2);
+    assert(maxOccuredChar == 'b');
+    free(array);
+    printf("<%c>", maxOccuredChar);
+    return 0;
+}
+#endif
 
 struct ArrayPointerAndSize {
     char *array;
@@ -147,43 +199,3 @@ char maxOccuredCharInArray (char *array, int size) {
     }
     return solution;
 }
-
-#else
-
-int main(int argc,char *argv[])
-{
-    int worker;
-    pthread_t threads[NTHREADS];                /* holds thread info */
-    int ids[NTHREADS];                          /* holds thread args */
-    int errcode;                                /* holds pthread error code */
-    int *status;                                /* holds return code */
-    /* create the threads */
-    for (worker=0; worker<NTHREADS; worker++) {
-        ids[worker]=worker;
-        if (errcode=pthread_create(&threads[worker],/* thread struct             */
-                               NULL,                    /* default thread attributes */
-                               hola,                    /* start routine             */
-                               &ids[worker])) {         /* arg to routine            */
-            fprintf(stderr,"pthread_create: %d\n",errcode);
-            exit(1);
-            //errexit(errcode,"pthread_create");
-        }
-    }
-    /* reap the threads as they exit */
-    for (worker=0; worker<NTHREADS; worker++) {
-        /* wait for thread to terminate */
-        if (errcode=pthread_join(threads[worker],(void *) &status)) {
-            //errexit(errcode,"pthread_join");
-            fprintf(stderr,"pthread_join: %d\n",errcode);
-            exit(1);
-        }
-        /* check thread's exit status and release its resources */
-        if (*status != worker) {
-            fprintf(stderr,"thread %d terminated abnormally\n",worker);
-            exit(1);
-        }
-    }
-    return(0);
-}
-
-#endif
