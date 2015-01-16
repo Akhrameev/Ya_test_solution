@@ -61,16 +61,42 @@
 #define __UP_MAX_DIRECT_SIZE 16384
 #define __UP_NUMBER_OF_ASCII_CHARS 256
 
+#include <signal.h>
+#define __UP_SIGNAL_CODE SIGUSR1
+//Этот метод может вернуть 0 в качестве символа и вызвать raise(__UP_SIGNAL_CODE).
 char mostFrequentCharacter (char *array, int size);
 
 #define TEST 0
 
 #if (!TEST)
+
+static int errorFlag = 0;
+
+static void hdl(int sig) {
+    //Важно не забыть (lldb) pro hand -p true -s false <__UP_SIGNAL_CODE>
+    //Здесь можно будет узнать об исключительной ситуации
+    errorFlag = sig;
+}
+
 int main(int argc,char *argv[]) {
+    //кусочек кода с http://habrahabr.ru/post/141206/ для обработки сигналов - думал, что я неверно что-то помню, оказалось, lldb перехватывал сигнал
+    struct sigaction act;
+    memset(&act, 0, sizeof(act));
+    act.sa_handler = hdl;
+    sigset_t   set;
+    sigemptyset(&set);
+    sigaddset(&set, __UP_SIGNAL_CODE);
+    act.sa_mask = set;
+    sigaction(__UP_SIGNAL_CODE, &act, 0);
     char *array = "abccejbfwejhfbawhefbajwebfahwbefjhab)wejhfcba";
+    errorFlag = 0;
     char mostFrequentChar = mostFrequentCharacter (array, (int)strlen(array));
-    printf("<%c>", mostFrequentChar);
-    return 0;
+    if (!mostFrequentChar && errorFlag) {
+        fprintf(stderr, "Error occured during processing mostFrequentCharacter (or other circumstances for calling __UP_SIGNAL_CODE)");
+    } else {
+        printf("<%c>", mostFrequentChar);
+    }
+    return EXIT_SUCCESS;
 }
 #else
 #include <assert.h>
@@ -170,7 +196,8 @@ int *mostFrequentCharacterInThreadWithOneArg(void *arg) {
 int *mostFrequentCharacterInThread (char *array, int size) {
     if (!array || size <= 0) {
         //Ошибка: некорректные данные на входе!
-        exit(0); //0 я не собираюсь разыменовывать!
+        raise(__UP_SIGNAL_CODE);
+        return 0; //0 я не собираюсь разыменовывать!
     }
     int *charStat = (int *) calloc((size_t) __UP_NUMBER_OF_ASCII_CHARS, (size_t) sizeof(int));
     for (size_t i = 0; i < size; ++i) {
@@ -183,7 +210,8 @@ int *mostFrequentCharacterInThread (char *array, int size) {
 char mostFrequentCharacter (char *array, int size) {
     if (!array || size <= 0) {
         //Ошибка: некорректные данные на входе!
-        exit(1);
+        raise(__UP_SIGNAL_CODE);
+        return 0;
     }
     if (size < 2) { //оптимизация очевидных случаев
         return array[0];    //если элементов в массиве 1 или 2, то первый элемент гарантированно попадает в ответ
@@ -235,18 +263,21 @@ char mostFrequentCharacter (char *array, int size) {
             int errcode = pthread_create(&threads[i], NULL, (returningVoidStarFunc)mostFrequentCharacterInThreadWithOneArg, &args[i]);
             if (errcode) {
                 fprintf(stderr,"pthread_create: %d\n",errcode);
-                exit(3);
+                raise(__UP_SIGNAL_CODE);
+                return 0;
             }
         }
         for (size_t i = 0; i < __UP_NTHREADS; ++i) {
             int errcode = pthread_join(threads[i], (void *)&resultStatistics[i]);
             if (errcode) {
                 fprintf(stderr,"pthread_join: %d\n",errcode);
-                exit(4);
+                raise(__UP_SIGNAL_CODE);
+                return 0;
             }
             if (!resultStatistics[i]) {
                 fprintf(stderr, "pthread %zu finished badly\n", i);
-                exit(5);
+                raise(__UP_SIGNAL_CODE);
+                return 0;
             }
         }
         int maxOccured = 0;
