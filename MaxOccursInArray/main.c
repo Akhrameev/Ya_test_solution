@@ -15,15 +15,15 @@
 #define __UP_MAX_DIRECT_SIZE 1024
 #define __UP_NUMBER_OF_ASCII_CHARS 256
 
-char maxOccuredCharInArray (char *array, int size);
+char mostFrequentCharacter (char *array, int size);
 
-#define TEST 1
+#define TEST 0
 
 #if (!TEST)
 int main(int argc,char *argv[]) {
     char *array = "abccejbfwejhfbawhefbajwebfahwbefjhab)wejhfcba";
-    char maxOccuredChar = maxOccuredCharInArray (array, (int)strlen(array));
-    printf("<%c>", maxOccuredChar);
+    char mostFrequentChar = mostFrequentCharacter (array, (int)strlen(array));
+    printf("<%c>", mostFrequentChar);
     return 0;
 }
 #else
@@ -31,14 +31,14 @@ int main(int argc,char *argv[]) {
 int main(int argc,char *argv[]) {
     //Не тестирую исключительные ситуации: неположительный размер массива, размер, указанный больше, чем строка - они вызовут exit(errorCode);
     char *array = "a";
-    char maxOccuredChar = maxOccuredCharInArray (array, (int)strlen(array));
-    assert(maxOccuredChar == 'a');
+    char mostFrequentChar = mostFrequentCharacter (array, (int)strlen(array));
+    assert(mostFrequentChar == 'a');
     array = "abba";
-    maxOccuredChar = maxOccuredCharInArray (array, (int)strlen(array));
-    assert(maxOccuredChar == 'a');
+    mostFrequentChar = mostFrequentCharacter (array, (int)strlen(array));
+    assert(mostFrequentChar == 'a');
     //проверю сос трокой "abb" - для этого нужно отсечь чуть-чуть длину
-    maxOccuredChar = maxOccuredCharInArray (array, (int)strlen(array) - 1);
-    assert(maxOccuredChar == 'b');
+    mostFrequentChar = mostFrequentCharacter (array, (int)strlen(array) - 1);
+    assert(mostFrequentChar == 'b');
     unsigned int maxPossibleLength = -1;    //здесь будет максимальный unsigned int
     //если мы его поделим пополам, у нас получится как раз максимальный int
     maxPossibleLength = maxPossibleLength/2;
@@ -53,8 +53,8 @@ int main(int argc,char *argv[]) {
             array[i] = 't';
         }
     }
-    maxOccuredChar = maxOccuredCharInArray (array, (int)length);
-    assert(maxOccuredChar == 't');
+    mostFrequentChar = mostFrequentCharacter (array, (int)length);
+    assert(mostFrequentChar == 't');
 #endif
     //делаю равномерное распределение символов по массиву (если забью нулями - ноль будет преобладать)
     for (size_t i = 0; i < length; ++i) {
@@ -68,15 +68,14 @@ int main(int argc,char *argv[]) {
             array[i] = 'b';
         }
     }
-    maxOccuredChar = maxOccuredCharInArray (array, (int)length);
-    assert(maxOccuredChar == 'a');
+    mostFrequentChar = mostFrequentCharacter (array, (int)length);
+    assert(mostFrequentChar == 'a');
     //проверяю массив без 1 символа - тоже должна преобладать 'a'
-    maxOccuredChar = maxOccuredCharInArray (array + sizeof(char) * 1, (int)length - 1);
-    assert(maxOccuredChar == 'a');
-    maxOccuredChar = maxOccuredCharInArray (array + sizeof(char) * 2, (int)length - 2);
-    assert(maxOccuredChar == 'b');
+    mostFrequentChar = mostFrequentCharacter (array + sizeof(char) * 1, (int)length - 1);
+    assert(mostFrequentChar == 'a');
+    mostFrequentChar = mostFrequentCharacter (array + sizeof(char) * 2, (int)length - 2);
+    assert(mostFrequentChar == 'b');
     free(array);
-    printf("<%c>", maxOccuredChar);
     return 0;
 }
 #endif
@@ -87,17 +86,17 @@ struct ArrayPointerAndSize {
 };
 
 //размер передан в int, таким образом, int'а будет достаточно для набора статистики
-int *maxOccuredCharInArrayInThread (char *array, int size);
+int *mostFrequentCharacterInThread (char *array, int size);
 
 typedef int     *(*returningIntArrayFunc)(void *);
 typedef void    *(*returningVoidStarFunc)(void *);
 
-int *maxOccuredCharInArrayInThreadWithOneArg(void *arg) {
+int *mostFrequentCharacterInThreadWithOneArg(void *arg) {
     struct ArrayPointerAndSize str= *((struct ArrayPointerAndSize *) arg);
-    return maxOccuredCharInArrayInThread(str.array, (int)str.size);
+    return mostFrequentCharacterInThread(str.array, (int)str.size);
 }
 
-int *maxOccuredCharInArrayInThread (char *array, int size) {
+int *mostFrequentCharacterInThread (char *array, int size) {
     if (!array || size <= 0) {
         //Ошибка: некорректные данные на входе!
         exit(0); //0 я не собираюсь разыменовывать!
@@ -110,7 +109,7 @@ int *maxOccuredCharInArrayInThread (char *array, int size) {
     return charStat;
 }
 
-char maxOccuredCharInArray (char *array, int size) {
+char mostFrequentCharacter (char *array, int size) {
     if (!array || size <= 0) {
         //Ошибка: некорректные данные на входе!
         exit(1);
@@ -162,7 +161,7 @@ char maxOccuredCharInArray (char *array, int size) {
         }
         //мне показалось, что разделить этапы важнее, чем получить 1 цикл из __UP_NTHREADS==2 операций вместо двух циклов с тем же количеством итераций
         for (size_t i = 0; i < __UP_NTHREADS; ++i) {
-            int errcode = pthread_create(&threads[i], NULL, (returningVoidStarFunc)maxOccuredCharInArrayInThreadWithOneArg, &args[i]);
+            int errcode = pthread_create(&threads[i], NULL, (returningVoidStarFunc)mostFrequentCharacterInThreadWithOneArg, &args[i]);
             if (errcode) {
                 fprintf(stderr,"pthread_create: %d\n",errcode);
                 exit(3);
